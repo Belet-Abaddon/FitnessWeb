@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('plan_id')->constrained('exercise_plans')->onDelete('cascade');
             $table->foreignId('exercise_id')->constrained('exercises')->onDelete('cascade');
-            $table->integer('duration_minutes'); // How long to do it in THIS plan
-            $table->integer('day_number'); // e.g., Day 1, Day 2
+            $table->integer('duration_minutes'); 
+            $table->integer('day_number'); 
             $table->timestamps();
         });
     }
