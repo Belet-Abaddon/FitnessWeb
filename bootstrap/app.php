@@ -19,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
         //
+        $middleware->validateCsrfTokens(except: [
+            '/chatbot', 
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

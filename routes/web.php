@@ -17,6 +17,7 @@ use App\Http\Controllers\ProgressController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\ChatbotController;
 
 
 Route::get('/', function () {
@@ -27,7 +28,6 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -42,6 +42,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/feedback', [FeedbackController::class, 'userIndex'])->name('user.feedback.index');
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('user.feedback.store');
     Route::delete('/feedback/{id}', [FeedbackController::class, 'destroy'])->name('feedback.destroy');
+    Route::post('/chatbot', [ChatbotController::class, 'chat'])->name('chatbot.send');
+    Route::get('/chat-history', [ChatbotController::class, 'getHistory'])->name('chatbot.history');
 });
 
 Route::middleware(['auth', 'admin'])->group(function () {
