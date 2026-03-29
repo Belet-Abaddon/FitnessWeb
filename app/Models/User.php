@@ -66,4 +66,8 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserPlan::class);
     }
+    public function chatMessages()
+    {
+        return $this->hasMany(ChatMessage::class);
+    }
 }
