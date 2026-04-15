@@ -19,6 +19,27 @@ use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ChatbotController;
 
+use Illuminate\Support\Facades\Http;
+
+// Route::get('/test-gemini', function () {
+//     $apiKey = env('GEMINI_API_KEY');
+//     // အခြေခံအကျဆုံး URL နဲ့ အရင်စမ်းမယ်
+//     $url = "https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key={$apiKey}";
+
+//     $response = Http::withoutVerifying()->post($url, [
+//         'content' => [
+//             'parts' => [
+//                 ['text' => 'Hello World']
+//             ]
+//         ]
+//     ]);
+
+//     return [
+//         'status' => $response->status(),
+//         'body' => $response->json(),
+//         'api_key_last_4' => substr($apiKey, -4) // key မှန်မမှန် စစ်ဖို့
+//     ];
+// });
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
