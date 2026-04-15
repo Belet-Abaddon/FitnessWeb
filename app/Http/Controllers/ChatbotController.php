@@ -23,27 +23,74 @@ class ChatbotController extends Controller
         }
 
         try {
-            $context = $this->prepareContext($user);
-            
+            $nutritionContext = $this->getNutritionContext($userInput);
+            $context = $this->prepareContext($user, $nutritionContext);
+
             $history = ChatMessage::where('user_id', $user->id)
-                        ->latest()->take(5)->get()->reverse();
+                ->latest()
+                ->take(5)
+                ->get()
+                ->reverse();
 
             $reply = $this->callGeminiApi($userInput, $context, $history);
 
-            $chat = new ChatMessage();
-            $chat->user_id = $user->id;
-            $chat->message = $userInput;
-            $chat->reply = $reply;
-            $chat->save();
+            ChatMessage::create([
+                'user_id' => $user->id,
+                'message' => $userInput,
+                'reply'   => $reply
+            ]);
 
             return response()->json(['reply' => $reply]);
-
         } catch (\Exception $e) {
             Log::error("Chatbot Error: " . $e->getMessage());
+
             return response()->json([
-                'reply' => 'I am having trouble connecting. Check your internet!',
-                'error_detail' => $e->getMessage() 
+                'reply' => 'I am having trouble connecting. Please try again.',
+                'error_detail' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    // ✅ Nutrition Vector Search
+    private function getNutritionContext($text)
+    {
+        try {
+            $response = Http::timeout(5)->post("http://localhost:11434/api/embeddings", [
+                "model" => "mxbai-embed-large",
+                "prompt" => $text
+            ]);
+
+            if ($response->failed()) return "";
+
+            $vector = $response->json()['embedding'] ?? null;
+            if (!$vector) return "";
+
+            $results = DB::connection('mongodb')
+                ->table('nutrition_tips')
+                ->raw(function ($collection) use ($vector) {
+                    return $collection->aggregate([
+                        [
+                            '$vectorSearch' => [
+                                'index' => 'vector_index',
+                                'path' => 'embedding',
+                                'queryVector' => $vector,
+                                'numCandidates' => 10,
+                                'limit' => 2
+                            ]
+                        ]
+                    ]);
+                });
+
+            $tips = "";
+            foreach ($results as $res) {
+                $content = is_array($res) ? ($res['content'] ?? '') : ($res->content ?? '');
+                if ($content) $tips .= "- " . $content . "\n";
+            }
+
+            return $tips;
+        } catch (\Exception $e) {
+            Log::warning("Vector Search Bypass: " . $e->getMessage());
+            return "";
         }
     }
 
@@ -54,7 +101,7 @@ class ChatbotController extends Controller
 
         $contents = [
             ['role' => 'user', 'parts' => [['text' => $systemContext]]],
-            ['role' => 'model', 'parts' => [['text' => "Understood. I will provide plain text responses only."]]]
+            ['role' => 'model', 'parts' => [['text' => "Understood. Plain text coach mode active."]]]
         ];
 
         foreach ($history as $chat) {
@@ -69,18 +116,17 @@ class ChatbotController extends Controller
         if ($response->successful()) {
             $rawReply = $response->json()['candidates'][0]['content']['parts'][0]['text'];
 
-            $cleanReply = preg_replace('/[*#_~`]/', '', $rawReply);
-            
-            return trim($cleanReply);
+            // remove markdown
+            return trim(preg_replace('/[*#_~`]/', '', $rawReply));
         }
 
         throw new \Exception("Gemini API Error: " . $response->body());
     }
 
-    private function prepareContext($user)
+    private function prepareContext($user, $nutritionContext = "")
     {
         $health = "User Info: Age {$user->age}, Gender {$user->gender}, BMI {$user->current_bmi}, Weight {$user->weight}kg.";
-        
+
         $plan = DB::table('user_plans')
             ->join('exercise_plans', 'user_plans.plan_id', '=', 'exercise_plans.id')
             ->where('user_plans.user_id', $user->id)
@@ -88,23 +134,31 @@ class ChatbotController extends Controller
             ->select('exercise_plans.name', 'exercise_plans.difficulty_level')
             ->first();
 
-        $planInfo = $plan ? "Currently following: {$plan->name} ({$plan->difficulty_level} level)." : "Not enrolled in a plan.";
+        $planInfo = $plan
+            ? "Currently following: {$plan->name} ({$plan->difficulty_level})."
+            : "No active plan.";
 
-        return "You are a Professional Fitness Coach. 
-                STRICT RULES:
-                1. Use ONLY PLAIN TEXT. 
-                2. NO BOLD (**), NO HEADERS (#), NO BULLETS (*). 
-                3. Use simple new lines for spacing.
-                4. Answer ONLY fitness/health topics.
-                Context: {$health} {$planInfo}";
+        $extra = $nutritionContext ? "\nTips: " . $nutritionContext : "";
+
+        return "You are a Professional Fitness Coach.
+        STRICT RULES:
+        1. Use ONLY PLAIN TEXT.
+        2. No bold, no symbols.
+        3. Short and friendly.
+        4. Talk like a coach.
+
+        Context:
+        {$health}
+        {$planInfo}
+        {$extra}";
     }
 
     public function getHistory()
     {
-        $userId = Auth::id() ?? 1; 
+        $userId = Auth::id() ?? 1;
 
         return ChatMessage::where('user_id', $userId)
-                ->orderBy('created_at', 'asc')
-                ->get();
+            ->orderBy('created_at', 'asc')
+            ->get();
     }
 }
