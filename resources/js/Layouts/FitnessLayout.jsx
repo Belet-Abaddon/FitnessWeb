@@ -57,14 +57,6 @@ export default function FitnessLayout({ children }) {
                                     <NavLink href="/workouts">Workouts</NavLink>
                                     <NavLink href="/progress">Progress</NavLink>
                                     <NavLink href="/feedback">Feedback</NavLink>
-                                    <button
-                                        onClick={() =>
-                                            window.dispatchEvent(new CustomEvent("open-chat"))
-                                        }
-                                        className="font-medium transition duration-150 text-base cursor-pointer text-gray-300 hover:text-green-500"
-                                    >
-                                        Chat
-                                    </button>
                                 </>
                             ) : (
                                 <>
@@ -81,16 +73,6 @@ export default function FitnessLayout({ children }) {
                         <div className="flex items-center space-x-4">
                             {user.id ? (
                                 <div className="flex items-center space-x-4">
-                                    <button
-                                        onClick={() => window.dispatchEvent(new CustomEvent("open-chat"))}
-                                        className="text-gray-400 hover:text-green-500 relative group"
-                                    >
-                                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                        </svg>
-                                        <span className="absolute top-0 right-0 h-2 w-2 bg-green-500 rounded-full group-hover:animate-pulse"></span>
-                                    </button>
-                                    
                                     {/* Dynamic User Profile */}
                                     <Link href="/profile" className="flex items-center space-x-3 cursor-pointer group">
                                         <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold border-2 border-green-500 overflow-hidden">

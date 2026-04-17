@@ -27,7 +27,7 @@ export default function UpdateProfileInformation({ className = '' }) {
     };
 
     return (
-        <section className={`max-w-5xl mx-auto space-y-6 ${className}`}>
+        <section className={`max-w-5x4 mx-auto space-y-6`}>
             <form onSubmit={submit} className="space-y-6">
                 
                 {/* 1. IDENTITY HEADER */}
