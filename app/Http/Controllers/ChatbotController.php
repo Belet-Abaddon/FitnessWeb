@@ -51,18 +51,22 @@ class ChatbotController extends Controller
         }
     }
 
-    // ✅ Nutrition Vector Search
     private function getNutritionContext($text)
     {
         try {
-            $response = Http::timeout(5)->post("http://localhost:11434/api/embeddings", [
-                "model" => "mxbai-embed-large",
-                "prompt" => $text
-            ]);
+            // Ollama အစား Mixedbread API ကို လှမ်းခေါ်ခြင်း
+            $response = Http::timeout(10)
+                ->withToken(env('MIXEDBREAD_API_KEY'))
+                ->post("https://api.mixedbread.ai/v1/embeddings", [
+                    "model" => "mixedbread-ai/mxbai-embed-large-v1",
+                    "input" => $text,
+                    "normalized" => true
+                ]);
 
             if ($response->failed()) return "";
 
-            $vector = $response->json()['embedding'] ?? null;
+            $vector = $response->json()['data'][0]['embedding'] ?? null;
+            
             if (!$vector) return "";
 
             $results = DB::connection('mongodb')
