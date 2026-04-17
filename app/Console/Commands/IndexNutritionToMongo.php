@@ -18,7 +18,6 @@ class IndexNutritionToMongo extends Command
         $this->info("Indexing " . $items->count() . " items to MongoDB using Ollama...");
 
         foreach ($items as $item) {
-            // MongoDB မှာ ရှိပြီးသားလား စစ်မယ်
             $exists = DB::connection('mongodb')
                 ->table('nutrition_tips')
                 ->where('original_id', $item->id)
@@ -29,7 +28,6 @@ class IndexNutritionToMongo extends Command
                 continue;
             }
 
-            // Local Ollama ကိုသုံးပြီး Embedding ယူမယ်
             $embedding = $this->getLocalEmbedding($item->content);
 
             if ($embedding) {
@@ -39,7 +37,7 @@ class IndexNutritionToMongo extends Command
                         'original_id' => $item->id,
                         'name' => $item->name,
                         'content' => $item->content,
-                        'embedding' => $embedding, // ဒါက 1024 dimensions ဖြစ်မယ်
+                        'embedding' => $embedding, 
                         'category' => $item->category,
                         'created_at' => now(),
                         'updated_at' => now()
@@ -57,17 +55,21 @@ class IndexNutritionToMongo extends Command
     private function getLocalEmbedding($text)
     {
         try {
-            // Ollama Local API Endpoint
-            $response = Http::timeout(30)->post("http://localhost:11434/api/embeddings", [
-                "model" => "mxbai-embed-large",
-                "prompt" => $text
-            ]);
+            // Mixedbread API Endpoint ကို ပြောင်းလဲခြင်း
+            $response = Http::timeout(30)
+                ->withToken(env('MIXEDBREAD_API_KEY'))
+                ->post("https://api.mixedbread.ai/v1/embeddings", [
+                    "model" => "mixedbread-ai/mxbai-embed-large-v1",
+                    "input" => $text,
+                    "normalized" => true
+                ]);
 
             if ($response->successful()) {
-                return $response->json()['embedding'];
+                // Response format: $response['data'][0]['embedding']
+                return $response->json()['data'][0]['embedding'];
             }
         } catch (\Exception $e) {
-            $this->error("Ollama connection error: " . $e->getMessage());
+            $this->error("Mixedbread connection error: " . $e->getMessage());
         }
         return null;
     }
