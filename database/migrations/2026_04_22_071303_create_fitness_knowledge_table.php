@@ -11,13 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('exercises', function (Blueprint $table) {
+        Schema::create('fitness_knowledge', function (Blueprint $table) {
             $table->id();
-            $table->string('title');
-            $table->text('description');
-            $table->decimal('met_value', 4, 2); 
-            $table->string('media_type')->default('file');
-            $table->string('media_path')->nullable();
+            $table->text('question');
+            $table->text('answer');  
+            $table->string('category')->default('General Fitness');
             $table->timestamps();
         });
     }
@@ -27,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('exercises');
+        Schema::dropIfExists('fitness_knowledge');
     }
 };

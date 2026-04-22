@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Exercise extends Model
 {
-    protected $fillable = ['title', 'description', 'met_value', 'media_path'];
+    protected $fillable = ['title', 'description', 'met_value', 'media_type', 'media_path'];
 
     public function plans()
     {

@@ -15,13 +15,11 @@ class PlanExerciseController extends Controller
     {
         $plan = ExercisePlan::findOrFail($id);
         
-        // We MUST use withPivot('id') so we can delete specific rows later
         $assignedExercises = $plan->exercises()
             ->withPivot('id', 'duration_minutes', 'day_number')
             ->orderBy('plan_exercises.day_number', 'asc')
             ->get();
 
-        // Fixed: changed 'name' to 'title' to match your schema
         $allExercises = Exercise::orderBy('title')->get(); 
 
         return Inertia::render('Admin/ManageExercises', [
@@ -35,7 +33,7 @@ class PlanExerciseController extends Controller
     {
         $validated = $request->validate([
             'exercise_id' => 'required|exists:exercises,id',
-            'duration_minutes' => 'required|integer|min:1',
+            'duration_minutes' => 'required|integer|min:0',
             'day_number' => 'required|integer|min:1',
         ]);
 

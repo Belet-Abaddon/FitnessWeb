@@ -82,7 +82,7 @@ export default function ManageExercises({ plan, allExercises, assignedExercises 
                                         className="w-full mt-1 rounded-xl border-gray-200"
                                         value={data.duration_minutes}
                                         onChange={e => setData('duration_minutes', e.target.value)}
-                                        min="1"
+                                        min="0"
                                     />
                                 </div>
                             </div>
