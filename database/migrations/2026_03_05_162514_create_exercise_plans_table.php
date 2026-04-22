@@ -17,9 +17,9 @@ return new class extends Migration
             $table->text('description');
             $table->integer('total_days')->default(30);
             $table->decimal('target_weight_loss', 5, 2)->nullable();
-            $table->string('min_bmi_category'); // Changed to help logic
+            $table->string('min_bmi_category'); 
             $table->string('max_bmi_category');
-            $table->string('difficulty_level'); // Beginner, Intermediate, etc.
+            $table->string('difficulty_level');
             $table->enum('status', ['published', 'unpublished'])->default('published');
             $table->timestamps();
         });

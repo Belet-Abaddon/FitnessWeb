@@ -55,7 +55,6 @@ class IndexNutritionToMongo extends Command
     private function getLocalEmbedding($text)
     {
         try {
-            // Mixedbread API Endpoint ကို ပြောင်းလဲခြင်း
             $response = Http::timeout(30)
                 ->withToken(env('MIXEDBREAD_API_KEY'))
                 ->post("https://api.mixedbread.ai/v1/embeddings", [
