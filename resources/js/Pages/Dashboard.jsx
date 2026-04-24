@@ -12,9 +12,19 @@ export default function Dashboard({
 }) {
     const [activeTab, setActiveTab] = useState("overview");
     const [historySubTab, setHistorySubTab] = useState("workouts");
-    const [showChatbot, setShowChatbot] = useState(false);
     const [previewVideo, setPreviewVideo] = useState(null);
     const { post, processing } = useForm();
+
+    const getEmbedUrl = (url) => {
+        if (!url) return "";
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+
+        if (match && match[2].length === 11) {
+            return `https://www.youtube.com/embed/${match[2]}?autoplay=1`;
+        }
+        return url;
+    };
 
     const handleMarkDone = (exercise) => {
         post(
@@ -110,43 +120,27 @@ export default function Dashboard({
                                         <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                                             {ex.media_path ? (
                                                 <button
-                                                    onClick={() =>
-                                                        setPreviewVideo(ex)
-                                                    }
+                                                    onClick={() => setPreviewVideo(ex)}
                                                     className="w-full h-full bg-black/10 flex items-center justify-center hover:bg-black/20 transition"
                                                 >
-                                                    <FileVideo
-                                                        size={20}
-                                                        className="text-gray-600"
-                                                    />
+                                                    <FileVideo size={20} className="text-gray-600" />
                                                 </button>
                                             ) : (
-                                                <span className="text-[10px] text-gray-400">
-                                                    No Video
-                                                </span>
+                                                <span className="text-[10px] text-gray-400">No Video</span>
                                             )}
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="font-bold text-gray-900">
-                                                {ex.title}
-                                            </h3>
+                                            <h3 className="font-bold text-gray-900">{ex.title}</h3>
                                             <p className="text-xs text-gray-500">
-                                                {ex.duration} • {ex.calories}{" "}
-                                                kcal
+                                                {ex.duration} • {ex.calories} kcal
                                             </p>
                                         </div>
                                         <button
-                                            disabled={
-                                                processing || ex.is_completed
-                                            }
+                                            disabled={processing || ex.is_completed}
                                             onClick={() => handleMarkDone(ex)}
                                             className={`px-4 py-2 rounded-lg text-xs font-bold ${ex.is_completed ? "bg-green-100 text-green-600" : "bg-green-600 text-white hover:bg-green-700"}`}
                                         >
-                                            {ex.is_completed ? (
-                                                <CheckCircle size={16} />
-                                            ) : (
-                                                "Mark Done"
-                                            )}
+                                            {ex.is_completed ? <CheckCircle size={16} /> : "Mark Done"}
                                         </button>
                                     </div>
                                 ))}
@@ -178,80 +172,39 @@ export default function Dashboard({
                                 <thead className="bg-gray-50">
                                     {historySubTab === "workouts" ? (
                                         <tr>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Date
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Exercise
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Calories
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Weight
-                                            </th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Exercise</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Calories</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Weight</th>
                                         </tr>
                                     ) : (
                                         <tr>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Date
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Weight
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                BMI
-                                            </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">
-                                                Status
-                                            </th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Weight</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">BMI</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
                                         </tr>
                                     )}
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {historySubTab === "workouts"
                                         ? workoutHistory.map((log) => (
-                                            <tr
-                                                key={log.id}
-                                                className="hover:bg-gray-50"
-                                            >
+                                            <tr key={log.id} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 text-sm text-gray-500">
-                                                    {log.date}{" "}
-                                                    <span className="text-[10px] block opacity-50">
-                                                        {log.time}
-                                                    </span>
+                                                    {log.date} <span className="text-[10px] block opacity-50">{log.time}</span>
                                                 </td>
-                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                                                    {log.exercise_title}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-green-600 font-bold">
-                                                    -{log.calories} kcal
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {log.weight} kg
-                                                </td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{log.exercise_title}</td>
+                                                <td className="px-6 py-4 text-sm text-green-600 font-bold">-{log.calories} kcal</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{log.weight} kg</td>
                                             </tr>
                                         ))
                                         : bmiHistory.map((row, i) => (
-                                            <tr
-                                                key={i}
-                                                className="hover:bg-gray-50"
-                                            >
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {new Date(
-                                                        row.created_at,
-                                                    ).toLocaleDateString()}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                                                    {row.weight} kg
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-blue-600">
-                                                    {row.bmi_value}
-                                                </td>
+                                            <tr key={i} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 text-sm text-gray-600">{new Date(row.created_at).toLocaleDateString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{row.weight} kg</td>
+                                                <td className="px-6 py-4 text-sm text-blue-600">{row.bmi_value}</td>
                                                 <td className="px-6 py-4">
-                                                    <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">
-                                                        {row.bmi_category}
-                                                    </span>
+                                                    <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">{row.bmi_category}</span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -262,18 +215,18 @@ export default function Dashboard({
                 )}
             </div>
 
-            {/* Video Modal */}
+            {/* Video Preview Modal */}
             {previewVideo && (
-                <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[70] p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[70] p-4 animate-in zoom-in duration-150">
                     <button
                         onClick={() => setPreviewVideo(null)}
-                        className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-all active:scale-90"
+                        className="absolute top-6 right-6 text-white hover:text-gray-300 transition-all active:scale-90 z-[80]"
                     >
-                        <X size={32} />
+                        <X size={36} />
                     </button>
 
-                    <div className="w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-                        {previewVideo.media_type === "youtube" ? (
+                    <div className="w-full max-w-4xl aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+                        {previewVideo.media_type === "youtube" || previewVideo.media_path.includes('youtube.com') || previewVideo.media_path.includes('youtu.be') ? (
                             <iframe
                                 width="100%"
                                 height="100%"
@@ -285,17 +238,11 @@ export default function Dashboard({
                             ></iframe>
                         ) : (
                             <video
-                                key={previewVideo.id}
+                                src={`/storage/${previewVideo.media_path}`}
+                                className="w-full h-full"
                                 controls
                                 autoPlay
-                                className="w-full h-full"
-                            >
-                                <source
-                                    src={`/storage/${previewVideo.media_path}`}
-                                    type="video/mp4"
-                                />
-                                Your browser does not support the video tag.
-                            </video>
+                            />
                         )}
                     </div>
                 </div>

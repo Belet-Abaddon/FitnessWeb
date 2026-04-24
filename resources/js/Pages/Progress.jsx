@@ -32,7 +32,7 @@ export default function Progress({
         stats.startingWeight !== stats.goalWeight
             ? ((stats.startingWeight - stats.currentWeight) /
                   (stats.startingWeight - stats.goalWeight)) *
-              100
+                100
             : 0;
 
     // Reverse data for the chart (Timeline from left to right)

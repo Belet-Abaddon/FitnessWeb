@@ -9,16 +9,29 @@ export default function GlobalChat() {
             type: "bot",
             message:
                 "Hello! I'm your FitLife assistant. How can I help you today?",
-            time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-            }),
+            time: getTime(),
         },
     ]);
     const [inputMessage, setInputMessage] = useState("");
     const [unreadCount, setUnreadCount] = useState(1);
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
+
+    function getTime() {
+        return new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    function formatTime(time) {
+        return time
+            ? new Date(time).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+              })
+            : "N/A";
+    }
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -28,75 +41,56 @@ export default function GlobalChat() {
         if (isOpen) scrollToBottom();
     }, [messages, isTyping]);
 
-    // Fetch Chat History
     useEffect(() => {
-        let isMounted = true;
+        if (!isOpen) return;
 
         const fetchHistory = async () => {
             try {
                 const response = await axios.get("/chat-history");
-                console.log("History Data:", response.data); // Console မှာ data ကျမကျ အရင်ကြည့်ပါ
 
-                if (response.data && response.data.length > 0) {
+                if (response.data?.length) {
                     const formattedMessages = response.data.flatMap((chat) => [
                         {
                             id: `u-${chat.id}`,
                             type: "user",
                             message: chat.message,
-                            
-                            time: chat.created_at
-                                ? new Date(chat.created_at).toLocaleTimeString(
-                                        [],
-                                        { hour: "2-digit", minute: "2-digit" },
-                                    )
-                                : "N/A",
+                            time: formatTime(chat.created_at),
                         },
                         {
                             id: `b-${chat.id}`,
                             type: "bot",
                             message: chat.reply,
-                            time: chat.created_at
-                                ? new Date(chat.created_at).toLocaleTimeString(
-                                        [],
-                                        { hour: "2-digit", minute: "2-digit" },
-                                    )
-                                : "N/A",
+                            time: formatTime(chat.created_at),
                         },
                     ]);
+
+                    // ❗ prevent duplicate
                     setMessages((prev) => [prev[0], ...formattedMessages]);
                 }
             } catch (error) {
-                console.error("Fetch Error Detail:", error.response);
+                console.error("Fetch Error:", error);
             }
         };
 
-        if (isOpen) {
-            fetchHistory();
-        }
-
-        return () => {
-            isMounted = false;
-        };
+        fetchHistory();
     }, [isOpen]);
 
     const toggleChat = () => {
-        setIsOpen(!isOpen);
+        setIsOpen((prev) => !prev);
         if (!isOpen) setUnreadCount(0);
     };
 
     const handleSendMessage = async (e) => {
-        if (e) e.preventDefault();
-        const textToSend = inputMessage.trim();
-        if (!textToSend) return;
+        e.preventDefault();
+
+        const text = inputMessage.trim();
+        if (!text) return;
 
         const userMessage = {
             id: Date.now(),
             type: "user",
-            message: textToSend,
-            time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-            }),
+            message: text,
+            time: getTime(),
         };
 
         setMessages((prev) => [...prev, userMessage]);
@@ -105,31 +99,37 @@ export default function GlobalChat() {
 
         try {
             const response = await axios.post("/chatbot", {
-                message: textToSend,
+                message: text,
             });
 
-            console.log("Full Response:", response.data);
+            const botMessage = {
+                id: `bot-${Date.now()}`,
+                type: "bot",
+                message: response.data?.reply || "No response",
+                time: getTime(),
+            };
 
-            if (response.data && response.data.reply) {
-                const botMessage = {
-                    id: `bot-${Date.now()}`,
-                    type: "bot",
-                    message: response.data.reply,
-                    time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                    }),
-                };
-                setMessages((prev) => [...prev, botMessage]);
-            }
+            setMessages((prev) => [...prev, botMessage]);
         } catch (error) {
             console.error("Connection Error:", error);
+
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: `err-${Date.now()}`,
+                    type: "bot",
+                    message: "⚠️ Cannot connect to server.",
+                    time: getTime(),
+                },
+            ]);
+        } finally {
+            setIsTyping(false);
         }
     };
 
     return (
         <>
-            {/* Chat Button Code remains the same */}
+            {/* Chat Button */}
             <button
                 onClick={toggleChat}
                 className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-emerald-600 text-white p-4 rounded-full shadow-lg z-50"
@@ -148,6 +148,7 @@ export default function GlobalChat() {
                     className="fixed bottom-24 right-6 w-96 bg-white rounded-xl shadow-2xl z-50 border border-gray-200 flex flex-col"
                     style={{ height: "500px" }}
                 >
+                    {/* Header */}
                     <div className="bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-4 py-3 rounded-t-xl flex justify-between items-center">
                         <div>
                             <h3 className="font-semibold text-sm">
@@ -160,44 +161,66 @@ export default function GlobalChat() {
                         <button onClick={toggleChat}>✕</button>
                     </div>
 
+                    {/* Messages */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30">
                         {messages.map((msg) => (
                             <div
                                 key={msg.id}
-                                className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                                className={`flex ${
+                                    msg.type === "user"
+                                        ? "justify-end"
+                                        : "justify-start"
+                                }`}
                             >
                                 <div
-                                    className={`max-w-[85%] ${msg.type === "user" ? "bg-blue-600 text-white rounded-l-lg rounded-tr-lg" : "bg-white text-gray-800 border border-gray-100 shadow-sm rounded-r-lg rounded-tl-lg"} p-3`}
+                                    className={`max-w-[85%] ${
+                                        msg.type === "user"
+                                            ? "bg-blue-600 text-white rounded-l-lg rounded-tr-lg"
+                                            : "bg-white text-gray-800 border border-gray-100 shadow-sm rounded-r-lg rounded-tl-lg"
+                                    } p-3`}
                                 >
-                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                    <p className="text-sm whitespace-pre-wrap">
                                         {msg.message}
                                     </p>
                                     <p
-                                        className={`text-[10px] mt-1 ${msg.type === "user" ? "text-blue-100" : "text-gray-400"}`}
+                                        className={`text-[10px] mt-1 ${
+                                            msg.type === "user"
+                                                ? "text-blue-100"
+                                                : "text-gray-400"
+                                        }`}
                                     >
                                         {msg.time}
                                     </p>
                                 </div>
                             </div>
                         ))}
+
                         {isTyping && (
                             <div className="text-xs text-gray-400 italic">
                                 Coach is typing...
                             </div>
                         )}
+
                         <div ref={messagesEndRef} />
                     </div>
 
+                    {/* Input */}
                     <form
                         onSubmit={handleSendMessage}
                         className="p-4 border-t border-gray-100 flex gap-2"
                     >
-                        <input
-                            type="text"
+                        <textarea
                             value={inputMessage}
                             onChange={(e) => setInputMessage(e.target.value)}
                             placeholder="Ask about your workout or BMI..."
-                            className="flex-1 px-4 py-2 border rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={1}
+                            className="flex-1 px-4 py-2 border rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            style={{ maxHeight: "120px" }}
+                            onInput={(e) => {
+                                e.target.style.height = "auto";
+                                e.target.style.height =
+                                    e.target.scrollHeight + "px";
+                            }}
                         />
                         <button
                             type="submit"

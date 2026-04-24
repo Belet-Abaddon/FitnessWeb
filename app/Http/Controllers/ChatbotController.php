@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\ChatMessage;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class ChatbotController extends Controller
 {
@@ -15,24 +17,25 @@ class ChatbotController extends Controller
     {
         set_time_limit(120);
 
-        $user = Auth::user() ?? \App\Models\User::find(1);
+        $user = Auth::user() ?? User::find(1);
         $userInput = $request->input('message');
 
         if (!$userInput || !$user) {
-            return response()->json(['reply' => 'User or Message not found.'], 400);
+            return response()->json(['reply' => 'Please provide a message.'], 400);
         }
 
         try {
-            $nutritionContext = $this->getNutritionContext($userInput);
-            $context = $this->prepareContext($user, $nutritionContext);
+            $ragContext = $this->getFitnessContextFromMongo($userInput);
+
+            $systemInstruction = $this->prepareContext($user, $ragContext);
 
             $history = ChatMessage::where('user_id', $user->id)
                 ->latest()
-                ->take(5)
+                ->take(3)
                 ->get()
                 ->reverse();
 
-            $reply = $this->callGeminiApi($userInput, $context, $history);
+            $reply = $this->callGroqApi($userInput, $systemInstruction, $history);
 
             ChatMessage::create([
                 'user_id' => $user->id,
@@ -41,36 +44,32 @@ class ChatbotController extends Controller
             ]);
 
             return response()->json(['reply' => $reply]);
+
         } catch (\Exception $e) {
             Log::error("Chatbot Error: " . $e->getMessage());
-
             return response()->json([
-                'reply' => 'I am having trouble connecting. Please try again.',
-                'error_detail' => $e->getMessage()
+                'reply' => '⚠️ Sorry! Connection fail.',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    private function getNutritionContext($text)
+    private function getFitnessContextFromMongo($text)
     {
         try {
-            // Ollama အစား Mixedbread API ကို လှမ်းခေါ်ခြင်း
-            $response = Http::timeout(10)
-                ->withToken(env('MIXEDBREAD_API_KEY'))
-                ->post("https://api.mixedbread.ai/v1/embeddings", [
-                    "model" => "mixedbread-ai/mxbai-embed-large-v1",
-                    "input" => $text,
-                    "normalized" => true
-                ]);
+            $ollamaResponse = Http::timeout(30)->post("http://localhost:11434/api/embeddings", [
+                "model" => "mxbai-embed-large",
+                "prompt" => $text
+            ]);
 
-            if ($response->failed()) return "";
+            if ($ollamaResponse->failed()) return "";
 
-            $vector = $response->json()['data'][0]['embedding'] ?? null;
-            
+            $vector = $ollamaResponse->json()['embedding'] ?? null;
             if (!$vector) return "";
 
+            // MongoDB Vector Search
             $results = DB::connection('mongodb')
-                ->table('nutrition_tips')
+                ->table('fitness_rag_store')
                 ->raw(function ($collection) use ($vector) {
                     return $collection->aggregate([
                         [
@@ -78,91 +77,92 @@ class ChatbotController extends Controller
                                 'index' => 'vector_index',
                                 'path' => 'embedding',
                                 'queryVector' => $vector,
-                                'numCandidates' => 10,
-                                'limit' => 2
+                                'numCandidates' => 100, 
+                                'limit' => 5 
                             ]
                         ]
                     ]);
                 });
 
-            $tips = "";
+            $contextText = "";
             foreach ($results as $res) {
-                $content = is_array($res) ? ($res['content'] ?? '') : ($res->content ?? '');
-                if ($content) $tips .= "- " . $content . "\n";
+                $data = (object) $res;
+                if (isset($data->text)) {
+                    $contextText .= "- " . $data->text . "\n";
+                }
             }
 
-            return $tips;
+            return $contextText;
+
         } catch (\Exception $e) {
-            Log::warning("Vector Search Bypass: " . $e->getMessage());
+            Log::warning("Vector Search Error: " . $e->getMessage());
             return "";
         }
     }
 
-    private function callGeminiApi($userInput, $systemContext, $history)
+    private function prepareContext($user, $ragContext = "")
     {
-        $apiKey = env('GEMINI_API_KEY');
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$apiKey}";
-
-        $contents = [
-            ['role' => 'user', 'parts' => [['text' => $systemContext]]],
-            ['role' => 'model', 'parts' => [['text' => "Understood. Plain text coach mode active."]]]
-        ];
-
-        foreach ($history as $chat) {
-            $contents[] = ['role' => 'user', 'parts' => [['text' => $chat->message]]];
-            $contents[] = ['role' => 'model', 'parts' => [['text' => $chat->reply]]];
+        // BMI Based Calorie Targeting Logic
+        $bmi = $user->current_bmi;
+        $adviceType = "";
+        
+        if ($bmi < 18.5) {
+            $adviceType = "UNDERWEIGHT: Focus on High Protein and High Calorie surplus. Target ~2500+ kcal.";
+        } elseif ($bmi >= 30) {
+            $adviceType = "OBESE/OVERWEIGHT: Focus on Calorie Deficit and high fiber. Target ~1500-1700 kcal.";
+        } elseif ($bmi >= 25) {
+            $adviceType = "OVERWEIGHT: Focus on moderate calorie deficit. Target ~1800-2000 kcal.";
+        } else {
+            $adviceType = "NORMAL: Focus on maintenance and balanced nutrition. Target ~2000-2200 kcal.";
         }
 
-        $contents[] = ['role' => 'user', 'parts' => [['text' => $userInput]]];
+        return "
+You are a Strict Database-Only Fitness AI. 
 
-        $response = Http::timeout(90)->post($url, ['contents' => $contents]);
+GOAL: Use ONLY the provided 'DATABASE CONTEXT' to answer questions. 
 
-        if ($response->successful()) {
-            $rawReply = $response->json()['candidates'][0]['content']['parts'][0]['text'];
+STRICT RULES:
+1. If the answer is NOT present in the DATABASE CONTEXT, say: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
+2. If the user asks anything non-fitness related (cooking steps, news, general facts), politely decline.
+3. For MEAL PLAN requests: Select appropriate items from the DATABASE CONTEXT that match the user's BMI goal.
 
-            // remove markdown
-            return trim(preg_replace('/[*#_~`]/', '', $rawReply));
-        }
+USER DATA:
+- Age: {$user->age}
+- Weight: {$user->weight} kg
+- BMI: {$user->current_bmi}
+- Goal Recommendation: {$adviceType}
 
-        throw new \Exception("Gemini API Error: " . $response->body());
+DATABASE CONTEXT:
+" . ($ragContext ?: "NO INFORMATION AVAILABLE IN DATABASE.") . "
+";
     }
 
-    private function prepareContext($user, $nutritionContext = "")
+    private function callGroqApi($userInput, $systemInstruction, $history)
     {
-        $health = "User Info: Age {$user->age}, Gender {$user->gender}, BMI {$user->current_bmi}, Weight {$user->weight}kg.";
+        $apiKey = env('GROQ_API_KEY');
+        $messages = [['role' => 'system', 'content' => $systemInstruction]];
 
-        $plan = DB::table('user_plans')
-            ->join('exercise_plans', 'user_plans.plan_id', '=', 'exercise_plans.id')
-            ->where('user_plans.user_id', $user->id)
-            ->where('user_plans.status', 'active')
-            ->select('exercise_plans.name', 'exercise_plans.difficulty_level')
-            ->first();
+        foreach ($history as $chat) {
+            $messages[] = ['role' => 'user', 'content' => $chat->message];
+            $messages[] = ['role' => 'assistant', 'content' => $chat->reply];
+        }
 
-        $planInfo = $plan
-            ? "Currently following: {$plan->name} ({$plan->difficulty_level})."
-            : "No active plan.";
+        $messages[] = ['role' => 'user', 'content' => $userInput];
 
-        $extra = $nutritionContext ? "\nTips: " . $nutritionContext : "";
+        $response = Http::withToken($apiKey)
+            ->timeout(60)
+            ->post("https://api.groq.com/openai/v1/chat/completions", [
+                'model' => 'llama-3.1-8b-instant',
+                'messages' => $messages,
+                'temperature' => 0.2,
+                'max_tokens' => 500,
+            ]);
 
-        return "You are a Professional Fitness Coach.
-        STRICT RULES:
-        1. Use ONLY PLAIN TEXT.
-        2. No bold, no symbols.
-        3. Short and friendly.
-        4. Talk like a coach.
-
-        Context:
-        {$health}
-        {$planInfo}
-        {$extra}";
+        return $response->json()['choices'][0]['message']['content'] ?? 'AI Service Error.';
     }
 
     public function getHistory()
     {
-        $userId = Auth::id() ?? 1;
-
-        return ChatMessage::where('user_id', $userId)
-            ->orderBy('created_at', 'asc')
-            ->get();
+        return ChatMessage::where('user_id', Auth::id() ?? 1)->orderBy('created_at', 'asc')->get();
     }
 }

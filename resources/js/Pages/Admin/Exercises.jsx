@@ -49,7 +49,6 @@ const ExerciseManagement = ({ exercises, filters, stats }) => {
 
     const updateFilters = useCallback(
         debounce((query) => {
-            // Search လုပ်တဲ့အခါ page ကို 1 ကနေ ပြန်စစေချင်ရင် page: 1 ထည့်ပေးရပါတယ်
             router.get(
                 route("exercises.index"),
                 { search: query },
@@ -63,7 +62,6 @@ const ExerciseManagement = ({ exercises, filters, stats }) => {
     );
 
     useEffect(() => {
-        // ပထမဆုံး load တဲ့အချိန်မှာ search query မရှိရင် update မလုပ်အောင် တားထားတာပါ
         if (searchQuery !== (filters.search || "")) {
             updateFilters(searchQuery);
         }
@@ -268,13 +266,10 @@ const ExerciseManagement = ({ exercises, filters, stats }) => {
                         </div>
                         <div className="flex items-center gap-1 flex-wrap justify-center">
                             {exercises.links.map((link, index) => {
-                                // link.label မှာ ရှေ့နောက် symbol တွေပါနေရင် link.url ကိုပဲ သုံးပြီး သွားခိုင်းတာက ပိုစိတ်ချရပါတယ်
                                 return (
                                     <Link
                                         key={index}
                                         href={link.url || "#"}
-                                        // preserveState ကို false ထားကြည့်ပါ သို့မဟုတ် မသုံးဘဲ ထားပါ
-                                        // ဒါမှ page refresh ဖြစ်သလို data အသစ်ကို သေချာဆွဲမှာပါ
                                         dangerouslySetInnerHTML={{ __html: link.label }}
                                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                                             link.active 
