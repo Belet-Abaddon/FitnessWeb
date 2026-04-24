@@ -106,14 +106,16 @@ export default function Workouts({
                         <div className="flex justify-between text-sm mb-2">
                             <span>Progress</span>
                             <span>
-                                {activePlan.completedWorkouts} /{" "}
-                                {activePlan.totalWorkouts} Days
+                                {activePlan.completedWorkouts ?? 0} /{" "}
+                                {activePlan.totalWorkouts ?? 0} Days
                             </span>
                         </div>
                         <div className="w-full bg-white bg-opacity-30 rounded-full h-3">
                             <div
                                 className="bg-white h-3 rounded-full transition-all duration-700"
-                                style={{ width: `${activePlan.progress}%` }}
+                                style={{
+                                    width: `${activePlan.progress ? activePlan.progress : 0}%`,
+                                }}
                             ></div>
                         </div>
                     </div>

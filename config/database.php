@@ -118,8 +118,8 @@ return [
             'dsn' => env('MONGODB_URI'),
             'database' => env('MONGODB_DATABASE', 'stayfit_db'),
             'options' => [
-                'tls' => true,
-                'tlsAllowInvalidCertificates' => true, 
+                'tls' => false, 
+                'tlsAllowInvalidCertificates' => true,
             ],
         ],
 

@@ -17,10 +17,11 @@ class WorkoutController extends Controller
     {
         $user = Auth::user();
 
-        // 1. Determine BMI Category
-        $userCategory = $user->current_bmi >= 30 ? 'Obese' : ($user->current_bmi >= 25 ? 'Overweight' : 'Normal');
+        $userCategory =
+            $user->current_bmi >= 30 ? 'Obese Class I'
+            : ($user->current_bmi >= 25 ? 'Overweight'
+                : 'Normal weight');
 
-        // 2. Fetch Plans with Day-grouped Exercises
         $workoutPlans = ExercisePlan::with(['exercises' => function ($query) {
             $query->orderBy('day_number', 'asc');
         }])
@@ -29,53 +30,66 @@ class WorkoutController extends Controller
             ->map(function ($plan) {
                 return [
                     'id' => $plan->id,
-                    'name' => $plan->name,
-                    'category' => $plan->min_bmi_category,
-                    'duration' => $plan->total_days . " Days",
-                    'description' => $plan->description,
-                    'longDescription' => $plan->description,
-                    'est_calories' => 300,
-                    'target_weight' => $plan->target_weight_loss . " kg",
-                    'level' => $plan->difficulty_level,
+                    'name' => $plan->name ?? '',
+                    'category' => $plan->min_bmi_category ?? 'General',
+                    'duration' => ($plan->total_days ?? 0) . " Days",
+                    'description' => $plan->description ?? '',
+                    'longDescription' => $plan->description ?? '',
+                    'est_calories' => $plan->est_calories ?? 300,
+                    'target_weight' => ($plan->target_weight_loss ?? 0) . " kg",
+                    'level' => $plan->difficulty_level ?? 'Beginner',
                     'daily_minutes' => "30 min",
-                    // Grouping exercises by day for the modal
-                    'exercises_by_day' => $plan->exercises->groupBy('pivot.day_number')
+                    'exercises_by_day' => $plan->exercises
+                        ->groupBy('pivot.day_number')
                         ->map(function ($dayGroup, $day) {
                             return [
                                 'day' => $day,
-                                'exercises' => $dayGroup->map(fn($ex) => [
-                                    'title' => $ex->title,
-                                    'duration' => $ex->pivot->duration_minutes
-                                ])
+                                'exercises' => $dayGroup->map(function ($ex) {
+                                    return [
+                                        'title' => $ex->title ?? '',
+                                        'duration' => $ex->pivot->duration_minutes ?? 0
+                                    ];
+                                })->values()->toArray()
                             ];
                         })->values()->toArray(),
-                    // Keep the simple list for the card view if needed
-                    'exercises' => $plan->exercises->pluck('title')->unique()->values()->toArray(),
                 ];
             });
 
-        // 3. Get Active Plan & Progress
         $activePivot = UserPlan::where('user_id', $user->id)
             ->where('status', 'active')
             ->with('plan')
             ->first();
 
         $currentUserPlan = null;
-        if ($activePivot) {
-            $totalDays = $activePivot->plan->total_days;
-            $completedCount = UserExerciseLog::where('user_plan_id', $activePivot->id)
-                ->join('plan_exercises', 'user_exercise_logs.exercise_id', '=', 'plan_exercises.exercise_id')
+
+        if ($activePivot && $activePivot->plan) {
+            $plan = $activePivot->plan;
+            $totalDays = (int) $plan->total_days;
+
+            $startDate = Carbon::parse($activePivot->start_date)->startOfDay();
+            $today = Carbon::now()->startOfDay();
+            $currentDayOfPlan = $startDate->diffInDays($today) + 1;
+
+            $completedDays = UserExerciseLog::where('user_plan_id', $activePivot->id)
+                ->join('plan_exercises', function ($join) use ($activePivot) {
+                    $join->on('user_exercise_logs.exercise_id', '=', 'plan_exercises.exercise_id')
+                        ->where('plan_exercises.plan_id', '=', $activePivot->plan_id);
+                })
+                ->whereDate('user_exercise_logs.created_at', '>=', $activePivot->start_date)
+                ->where('plan_exercises.day_number', '<=', $currentDayOfPlan)
                 ->distinct('plan_exercises.day_number')
                 ->count('plan_exercises.day_number');
 
+            $progress = $totalDays > 0 ? round(($completedDays / $totalDays) * 100) : 0;
+
             $currentUserPlan = [
-                'name' => $activePivot->plan->name,
-                'progress' => ($totalDays > 0) ? round(($completedCount / $totalDays) * 100) : 0,
+                'name' => $plan->name ?? 'No Active Plan Selected',
+                'progress' => min($progress, 100),
                 'startDate' => Carbon::parse($activePivot->start_date)->format('M d, Y'),
                 'endDate' => Carbon::parse($activePivot->start_date)->addDays($totalDays)->format('M d, Y'),
-                'completedWorkouts' => $completedCount,
+                'completedWorkouts' => $completedDays,
                 'totalWorkouts' => $totalDays,
-                'nextWorkout' => "Day " . ($completedCount + 1),
+                'nextWorkout' => "Day " . ($completedDays + 1),
             ];
         }
 
