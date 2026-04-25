@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class ChatbotController extends Controller
 {
@@ -44,7 +43,6 @@ class ChatbotController extends Controller
             ]);
 
             return response()->json(['reply' => $reply]);
-
         } catch (\Exception $e) {
             Log::error("Chatbot Error: " . $e->getMessage());
             return response()->json([
@@ -67,7 +65,6 @@ class ChatbotController extends Controller
             $vector = $ollamaResponse->json()['embedding'] ?? null;
             if (!$vector) return "";
 
-            // MongoDB Vector Search
             $results = DB::connection('mongodb')
                 ->table('fitness_rag_store')
                 ->raw(function ($collection) use ($vector) {
@@ -77,8 +74,8 @@ class ChatbotController extends Controller
                                 'index' => 'vector_index',
                                 'path' => 'embedding',
                                 'queryVector' => $vector,
-                                'numCandidates' => 100, 
-                                'limit' => 5 
+                                'numCandidates' => 200, 
+                                'limit' => 20 
                             ]
                         ]
                     ]);
@@ -91,9 +88,7 @@ class ChatbotController extends Controller
                     $contextText .= "- " . $data->text . "\n";
                 }
             }
-
             return $contextText;
-
         } catch (\Exception $e) {
             Log::warning("Vector Search Error: " . $e->getMessage());
             return "";
@@ -102,39 +97,28 @@ class ChatbotController extends Controller
 
     private function prepareContext($user, $ragContext = "")
     {
-        // BMI Based Calorie Targeting Logic
         $bmi = $user->current_bmi;
-        $adviceType = "";
-        
-        if ($bmi < 18.5) {
-            $adviceType = "UNDERWEIGHT: Focus on High Protein and High Calorie surplus. Target ~2500+ kcal.";
-        } elseif ($bmi >= 30) {
-            $adviceType = "OBESE/OVERWEIGHT: Focus on Calorie Deficit and high fiber. Target ~1500-1700 kcal.";
-        } elseif ($bmi >= 25) {
-            $adviceType = "OVERWEIGHT: Focus on moderate calorie deficit. Target ~1800-2000 kcal.";
-        } else {
-            $adviceType = "NORMAL: Focus on maintenance and balanced nutrition. Target ~2000-2200 kcal.";
-        }
+        $adviceType = $bmi >= 30 ? "OBESE (Target: 1500-1700 kcal)" : ($bmi >= 25 ? "OVERWEIGHT (Target: 1800-2000 kcal)" : "NORMAL (Target: 2000-2200 kcal)");
 
         return "
-You are a Strict Database-Only Fitness AI. 
+You are a Professional Fitness AI Coach. 
 
-GOAL: Use ONLY the provided 'DATABASE CONTEXT' to answer questions. 
+STRICT INSTRUCTIONS:
+1. Use ONLY the 'DATABASE CONTEXT' section below to provide detailed and accurate answers.
+2. ALWAYS complete your sentences. Do not stop mid-sentence. 
+3. If you find specific data (like calories, protein, or exercise steps), list them CLEARLY and FULLY.
+4. If the requested information is NOT in the database context, respond with: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
+5. Use plain text only. Do not use Markdown, bolding, or hashtags.
+6. If the data provides specific numbers (like calories or protein), you MUST report them EXACTLY as they appear in the database. DO NOT round the numbers.
+7. MEDICAL RESTRICTION: Do NOT provide any medical advice, medication dosages, or drug recommendations (e.g., Aspirin, Ibuprofen, etc.). 
+8. If a user asks for medical advice, respond with: I am sorry, but I cannot provide medical advice or medication recommendations. Please consult a healthcare professional.
 
-STRICT RULES:
-1. If the answer is NOT present in the DATABASE CONTEXT, say: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
-2. If the user asks anything non-fitness related (cooking steps, news, general facts), politely decline.
-3. For MEAL PLAN requests: Select appropriate items from the DATABASE CONTEXT that match the user's BMI goal.
-
-USER DATA:
-- Age: {$user->age}
-- Weight: {$user->weight} kg
-- BMI: {$user->current_bmi}
-- Goal Recommendation: {$adviceType}
+USER PROFILE:
+- Age: {$user->age}, Weight: {$user->weight}kg, BMI: {$user->current_bmi}
+- Fitness Goal: {$adviceType}
 
 DATABASE CONTEXT:
-" . ($ragContext ?: "NO INFORMATION AVAILABLE IN DATABASE.") . "
-";
+" . ($ragContext ?: "NO DATA FOUND IN DATABASE.");
     }
 
     private function callGroqApi($userInput, $systemInstruction, $history)
@@ -150,13 +134,13 @@ DATABASE CONTEXT:
         $messages[] = ['role' => 'user', 'content' => $userInput];
 
         $response = Http::withToken($apiKey)
-            ->timeout(60)
-            ->post("https://api.groq.com/openai/v1/chat/completions", [
-                'model' => 'llama-3.1-8b-instant',
-                'messages' => $messages,
-                'temperature' => 0.2,
-                'max_tokens' => 500,
-            ]);
+        ->timeout(60)
+        ->post("https://api.groq.com/openai/v1/chat/completions", [
+            'model' => 'llama-3.1-8b-instant',
+            'messages' => $messages,
+            'temperature' => 0.0,
+            'max_tokens' => 1500, 
+        ]);
 
         return $response->json()['choices'][0]['message']['content'] ?? 'AI Service Error.';
     }
