@@ -73,28 +73,30 @@ class IndexEverythingToMongo extends Command
     {
         $plans = ExercisePlan::with('exercises')->get();
         $total = $plans->count();
-        $this->info("\n--- Indexing Exercise Plans ($total items) ---");
+        $this->info("\n--- Indexing Exercise Plans with Full Details ($total items) ---");
 
         foreach ($plans as $index => $plan) {
             $count = $index + 1;
 
-            $exists = DB::connection('mongodb')
-                ->table('fitness_rag_store')
-                ->where('original_id', $plan->id)
-                ->where('source_type', 'plan')
-                ->exists();
-
-            if ($exists) {
-                $this->line("⏩ [$count/$total] Skipping Plan: " . $plan->name);
-                continue;
+            $detailedExercises = "";
+            foreach ($plan->exercises as $ex) {
+                $detailedExercises .= "- Day {$ex->pivot->day_number}: {$ex->title} for {$ex->pivot->duration_minutes} minutes\n";
             }
 
-            $exerciseList = $plan->exercises->pluck('title')->implode(', ');
-            $textToIndex = "Source: Plan\nName: {$plan->name}\nGoal: BMI {$plan->min_bmi_category}-{$plan->max_bmi_category}\nExercises: {$exerciseList}";
+            $textToIndex = "Source: Plan\n" .
+                "Name: {$plan->name}\n" .
+                "Description: {$plan->description}\n" .
+                "Goal: BMI {$plan->min_bmi_category} to {$plan->max_bmi_category}\n" .
+                "Weekly Routine Details:\n" . $detailedExercises;
 
             $embedding = $this->getOllamaEmbedding($textToIndex);
 
             if ($embedding) {
+                DB::connection('mongodb')->table('fitness_rag_store')
+                    ->where('original_id', $plan->id)
+                    ->where('source_type', 'plan')
+                    ->delete();
+
                 DB::connection('mongodb')->table('fitness_rag_store')->insert([
                     'original_id' => $plan->id,
                     'source_type' => 'plan',
@@ -103,7 +105,7 @@ class IndexEverythingToMongo extends Command
                     'category'    => $plan->difficulty_level,
                     'created_at'  => now(),
                 ]);
-                $this->info("✔️ [$count/$total] Indexed Plan: " . $plan->name);
+                $this->info("✔️ [$count/$total] Fully Indexed Plan: " . $plan->name);
             }
         }
     }
@@ -111,10 +113,10 @@ class IndexEverythingToMongo extends Command
     private function getOllamaEmbedding($text)
     {
         try {
-            $url = "http://localhost:11434/api/embeddings";
+            $url = "http://ollama:11434/api/embeddings";
 
             $response = Http::timeout(60)->post($url, [
-                'model' => 'mxbai-embed-large', 
+                'model' => 'mxbai-embed-large',
                 'prompt' => $text,
             ]);
 

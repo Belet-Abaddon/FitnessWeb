@@ -1,0 +1,50 @@
+services:
+  # Laravel App
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stayfit_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www
+    depends_on:
+      - mysql
+      - mongodb
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: stayfit_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: stay_fit
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # MongoDB with Atlas Search
+  mongodb:
+    image: mongo:7.0
+    container_name: stayfit_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    command: mongod --quiet --logpath /dev/null 
+
+  # Ollama AI
+  ollama:
+    image: ollama/ollama:latest
+    container_name: stayfit_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  mysql_data:
+  mongodb_data:
+  ollama_data:
