@@ -55,7 +55,7 @@ class ChatbotController extends Controller
     private function getFitnessContextFromMongo($text)
     {
         try {
-            $ollamaResponse = Http::timeout(30)->post("http://localhost:11434/api/embeddings", [
+            $ollamaResponse = Http::timeout(30)->post("http://ollama:11434/api/embeddings", [
                 "model" => "mxbai-embed-large",
                 "prompt" => $text
             ]);
@@ -70,12 +70,18 @@ class ChatbotController extends Controller
                 ->raw(function ($collection) use ($vector) {
                     return $collection->aggregate([
                         [
-                            '$vectorSearch' => [
+                            '$vectorSearch' => [ 
                                 'index' => 'vector_index',
                                 'path' => 'embedding',
                                 'queryVector' => $vector,
-                                'numCandidates' => 200, 
-                                'limit' => 20 
+                                'numCandidates' => 100,
+                                'limit' => 5
+                            ]
+                        ],
+                        [
+                            '$project' => [
+                                'text' => 1,
+                                'score' => ['$meta' => 'vectorSearchScore']
                             ]
                         ]
                     ]);
@@ -98,24 +104,21 @@ class ChatbotController extends Controller
     private function prepareContext($user, $ragContext = "")
     {
         $bmi = $user->current_bmi;
-        $adviceType = $bmi >= 30 ? "OBESE (Target: 1500-1700 kcal)" : ($bmi >= 25 ? "OVERWEIGHT (Target: 1800-2000 kcal)" : "NORMAL (Target: 2000-2200 kcal)");
+        $adviceType = $bmi >= 30 ? "OBESE" : ($bmi >= 25 ? "OVERWEIGHT" : "NORMAL");
 
         return "
-You are a Professional Fitness AI Coach. 
+You are a Fitness Information Assistant. Your ONLY job is to relay information exactly as it is found in the provided DATABASE CONTEXT.
 
-STRICT INSTRUCTIONS:
-1. Use ONLY the 'DATABASE CONTEXT' section below to provide detailed and accurate answers.
-2. ALWAYS complete your sentences. Do not stop mid-sentence. 
-3. If you find specific data (like calories, protein, or exercise steps), list them CLEARLY and FULLY.
-4. If the requested information is NOT in the database context, respond with: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
-5. Use plain text only. Do not use Markdown, bolding, or hashtags.
-6. If the data provides specific numbers (like calories or protein), you MUST report them EXACTLY as they appear in the database. DO NOT round the numbers.
-7. MEDICAL RESTRICTION: Do NOT provide any medical advice, medication dosages, or drug recommendations (e.g., Aspirin, Ibuprofen, etc.). 
-8. If a user asks for medical advice, respond with: I am sorry, but I cannot provide medical advice or medication recommendations. Please consult a healthcare professional.
+STRICT OPERATING RULES:
+1. If the user asks for a recommendation (e.g., 'What should I do?'), you must check the DATABASE CONTEXT. If the context contains a specific exercise plan or advice, summarize ONLY that data.
+2. DO NOT create your own recommendations, sets, reps, or rest periods if they are not explicitly written in the DATABASE CONTEXT.
+3. If the DATABASE CONTEXT is empty or does not contain the specific answer, you MUST say: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
+4. NEVER provide medical advice or drug names.
+5. Do not use phrases like 'I recommend' or 'You should' unless that exact advice is in the database.
+6. When providing information about a workout plan, always start with a brief description followed by the complete exercise schedule (Day, Exercise Name, and Duration) in a clear list format.
 
 USER PROFILE:
-- Age: {$user->age}, Weight: {$user->weight}kg, BMI: {$user->current_bmi}
-- Fitness Goal: {$adviceType}
+- BMI: {$user->current_bmi} ({$adviceType})
 
 DATABASE CONTEXT:
 " . ($ragContext ?: "NO DATA FOUND IN DATABASE.");
@@ -134,13 +137,13 @@ DATABASE CONTEXT:
         $messages[] = ['role' => 'user', 'content' => $userInput];
 
         $response = Http::withToken($apiKey)
-        ->timeout(60)
-        ->post("https://api.groq.com/openai/v1/chat/completions", [
-            'model' => 'llama-3.1-8b-instant',
-            'messages' => $messages,
-            'temperature' => 0.0,
-            'max_tokens' => 1500, 
-        ]);
+            ->timeout(60)
+            ->post("https://api.groq.com/openai/v1/chat/completions", [
+                'model' => 'llama-3.1-8b-instant',
+                'messages' => $messages,
+                'temperature' => 0.0,
+                'max_tokens' => 1500,
+            ]);
 
         return $response->json()['choices'][0]['message']['content'] ?? 'AI Service Error.';
     }

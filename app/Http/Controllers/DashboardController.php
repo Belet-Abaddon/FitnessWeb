@@ -147,19 +147,30 @@ class DashboardController extends Controller
             ->pluck('date');
 
         if ($dates->isEmpty()) return 0;
-        
+
         $streak = 0;
         $compareDate = Carbon::today();
 
+        $latestLogDate = Carbon::parse($dates->first());
+        if (!$latestLogDate->isToday() && !$latestLogDate->isYesterday()) {
+            return 0;
+        }
+
+        if (!$latestLogDate->isToday()) {
+            $compareDate = Carbon::yesterday();
+        }
+
         foreach ($dates as $date) {
             $logDate = Carbon::parse($date);
+
             if ($logDate->eq($compareDate)) {
                 $streak++;
                 $compareDate->subDay();
-            } elseif ($logDate->lt($compareDate)) {
+            } else {
                 break;
             }
         }
+
         return $streak;
     }
 }
