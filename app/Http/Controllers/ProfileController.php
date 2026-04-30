@@ -35,14 +35,9 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $validatedData = $request->validated();
-
-        // 1. Check if physical data changed BEFORE we fill the model
         $statsChanged = ($user->weight != $request->weight || $user->height != $request->height);
-
-        // 2. Fill the user model with validated data
         $user->fill($validatedData);
-
-        // 3. BMI Logic
+        $user->is_reminder_on = $request->boolean('is_reminder_on');
         if ($user->height > 0 && $user->weight > 0) {
             $heightInMeters = $user->height / 100;
             $bmi = $user->weight / ($heightInMeters * $heightInMeters);
