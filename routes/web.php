@@ -74,8 +74,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::get('/admin/bmi-records', [BMIRecordController::class, 'index'])->name('admin.bmi.index');
 
-    Route::get('admin/feedback', [AdminFeedbackController::class, 'index'])->name('feedback');
-    Route::delete('/feedback/{id}', [AdminFeedbackController::class, 'destroy'])->name('feedback.destroy');
+    Route::get('admin/feedback', [AdminFeedbackController::class, 'index'])->name('admin.feedback');
 });
 
 require __DIR__ . '/auth.php';

@@ -9,30 +9,31 @@ use App\Models\NutritionTip;
 use App\Models\FitnessKnowledge;
 use App\Models\Exercise;
 use App\Models\ExercisePlan;
+use Illuminate\Support\Collection;
 
 class IndexEverythingToMongo extends Command
 {
     protected $signature = 'fitness:index-all';
-    protected $description = 'Index all fitness data to Local MongoDB using Ollama Local Embedding';
+    protected $description = 'Index all fitness data to Local MongoDB using Ollama mxbai-embed-large';
 
     public function handle()
     {
         set_time_limit(0);
 
-        $this->info("🚀 Starting the Indexing process with Ollama (nomic-embed-text)...");
+        $this->info("🚀 Starting Indexing process with Ollama (mxbai-embed-large)...");
+
+        DB::connection('mongodb')->table('fitness_rag_store')->truncate();
+        $this->warn("Clear existing MongoDB store... Done.");
 
         $this->processCollection(NutritionTip::all(), 'nutrition', 'name', 'content');
-
         $this->processCollection(FitnessKnowledge::all(), 'knowledge', 'question', 'answer');
-
         $this->processCollection(Exercise::all(), 'exercise', 'title', 'description');
-
         $this->indexPlans();
 
-        $this->info("\n✅ [COMPLETED] All collections indexed successfully with Ollama!");
+        $this->info("\n✅ [COMPLETED] All collections indexed successfully!");
     }
 
-    private function processCollection($items, $sourceType, $titleField, $contentField)
+    private function processCollection(Collection $items, string $sourceType, string $titleField, string $contentField): void
     {
         $total = $items->count();
         $this->info("\n--- Indexing $sourceType ($total items) ---");
@@ -40,19 +41,7 @@ class IndexEverythingToMongo extends Command
         foreach ($items as $index => $item) {
             $count = $index + 1;
 
-            $exists = DB::connection('mongodb')
-                ->table('fitness_rag_store')
-                ->where('original_id', $item->id)
-                ->where('source_type', $sourceType)
-                ->exists();
-
-            if ($exists) {
-                $this->line("⏩ [$count/$total] Skipping: " . $item->$titleField);
-                continue;
-            }
-
             $textToIndex = "Source: " . ucfirst($sourceType) . "\nTitle: " . $item->$titleField . "\nContent: " . $item->$contentField;
-
             $embedding = $this->getOllamaEmbedding($textToIndex);
 
             if ($embedding) {
@@ -73,30 +62,19 @@ class IndexEverythingToMongo extends Command
     {
         $plans = ExercisePlan::with('exercises')->get();
         $total = $plans->count();
-        $this->info("\n--- Indexing Exercise Plans with Full Details ($total items) ---");
+        $this->info("\n--- Indexing Exercise Plans ($total items) ---");
 
         foreach ($plans as $index => $plan) {
             $count = $index + 1;
-
             $detailedExercises = "";
             foreach ($plan->exercises as $ex) {
                 $detailedExercises .= "- Day {$ex->pivot->day_number}: {$ex->title} for {$ex->pivot->duration_minutes} minutes\n";
             }
 
-            $textToIndex = "Source: Plan\n" .
-                "Name: {$plan->name}\n" .
-                "Description: {$plan->description}\n" .
-                "Goal: BMI {$plan->min_bmi_category} to {$plan->max_bmi_category}\n" .
-                "Weekly Routine Details:\n" . $detailedExercises;
-
+            $textToIndex = "Source: Plan\nName: {$plan->name}\nDescription: {$plan->description}\nGoal: BMI {$plan->min_bmi_category} to {$plan->max_bmi_category}\nWeekly Routine:\n" . $detailedExercises;
             $embedding = $this->getOllamaEmbedding($textToIndex);
 
             if ($embedding) {
-                DB::connection('mongodb')->table('fitness_rag_store')
-                    ->where('original_id', $plan->id)
-                    ->where('source_type', 'plan')
-                    ->delete();
-
                 DB::connection('mongodb')->table('fitness_rag_store')->insert([
                     'original_id' => $plan->id,
                     'source_type' => 'plan',
@@ -110,24 +88,18 @@ class IndexEverythingToMongo extends Command
         }
     }
 
-    private function getOllamaEmbedding($text)
+    private function getOllamaEmbedding(string $text): ?array
     {
         try {
-            $url = "http://ollama:11434/api/embeddings";
-
-            $response = Http::timeout(60)->post($url, [
+            $response = Http::timeout(60)->post("http://ollama:11434/api/embeddings", [
                 'model' => 'mxbai-embed-large',
                 'prompt' => $text,
             ]);
 
-            if ($response->successful()) {
-                return $response->json()['embedding'];
-            }
-
-            $this->error("Ollama API Error: " . $response->status() . " - " . $response->body());
+            return $response->successful() ? $response->json()['embedding'] : null;
         } catch (\Exception $e) {
-            $this->error("Ollama Connection Error: " . $e->getMessage());
+            $this->error("Ollama Error: " . $e->getMessage());
+            return null;
         }
-        return null;
     }
 }

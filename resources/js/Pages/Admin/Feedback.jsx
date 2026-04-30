@@ -1,26 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { router, usePage } from '@inertiajs/react';
-import {
-    MessageSquare, Star, Search, Filter, Clock, CheckCircle, 
-    Download, Reply, Archive, Trash2
+import { 
+    MessageSquare, Star, Clock, CheckCircle 
 } from 'lucide-react';
 
-const FeedbackManagement = ({ feedbacks, stats, filters }) => {
-    const [searchQuery, setSearchQuery] = useState(filters.search || '');
-
-    // Handle Search with debounce or manual trigger
-    const handleSearch = (e) => {
-        const value = e.target.value;
-        setSearchQuery(value);
-        
-        // Use router.get to refresh the data with the search query
-        router.get(route('admin.feedback'), { search: value }, {
-            preserveState: true,
-            replace: true
-        });
-    };
-
+const FeedbackManagement = ({ feedbacks, stats }) => {
     const renderStars = (rating) => (
         <div className="flex gap-0.5">
             {[...Array(5)].map((_, i) => (
@@ -44,18 +28,9 @@ const FeedbackManagement = ({ feedbacks, stats, filters }) => {
                     <StatCard title="Resolved" value={stats.resolved} icon={<CheckCircle />} color="emerald" />
                 </div>
 
-                {/* --- ACTION BAR --- */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="relative w-full md:w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input 
-                            type="text" 
-                            placeholder="Search comments or users..."
-                            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-all"
-                            value={searchQuery}
-                            onChange={handleSearch}
-                        />
-                    </div>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-800">Feedback Records</h2>
+                    <span className="text-sm text-gray-500">{feedbacks.total} entries found</span>
                 </div>
 
                 {/* --- FEEDBACK LIST --- */}
@@ -89,16 +64,6 @@ const FeedbackManagement = ({ feedbacks, stats, filters }) => {
                                         {renderStars(item.rating)}
                                         <span className="text-xs text-gray-400 capitalize">#{item.status}</span>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"><Reply size={18}/></button>
-                                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"><Archive size={18}/></button>
-                                        <button 
-                                            onClick={() => router.delete(route('admin.feedback.destroy', item.id))}
-                                            className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
-                                        >
-                                            <Trash2 size={18}/>
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -106,7 +71,7 @@ const FeedbackManagement = ({ feedbacks, stats, filters }) => {
                     
                     {feedbacks.data.length === 0 && (
                         <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-                            <p className="text-gray-500">No feedback found matching your search.</p>
+                            <p className="text-gray-500">No feedback available yet.</p>
                         </div>
                     )}
                 </div>
@@ -115,6 +80,7 @@ const FeedbackManagement = ({ feedbacks, stats, filters }) => {
     );
 };
 
+// StatCard component remains same
 const StatCard = ({ title, value, icon, color, trend }) => (
     <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
         <div className={`p-3 rounded-lg ${

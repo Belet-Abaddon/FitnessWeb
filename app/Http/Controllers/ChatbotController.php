@@ -15,16 +15,21 @@ class ChatbotController extends Controller
     public function chat(Request $request)
     {
         set_time_limit(120);
-
         $user = Auth::user() ?? User::find(1);
         $userInput = $request->input('message');
 
-        if (!$userInput || !$user) {
-            return response()->json(['reply' => 'Please provide a message.'], 400);
-        }
+        Log::info("--- New Chat Request ---");
+        Log::info("User Input: " . $userInput);
 
         try {
+            // ၁။ MongoDB ကနေ Context ရှာတဲ့အဆင့်ကို စစ်မယ်
             $ragContext = $this->getFitnessContextFromMongo($userInput);
+
+            if (empty($ragContext)) {
+                Log::warning("⚠️ Debug: No Context found in MongoDB for this query.");
+            } else {
+                Log::info("✅ Debug: Context found successfully.");
+            }
 
             $systemInstruction = $this->prepareContext($user, $ragContext);
 
@@ -34,6 +39,7 @@ class ChatbotController extends Controller
                 ->get()
                 ->reverse();
 
+            // ၂။ Groq API ပို့တဲ့အဆင့်ကို စစ်မယ်
             $reply = $this->callGroqApi($userInput, $systemInstruction, $history);
 
             ChatMessage::create([
@@ -44,7 +50,7 @@ class ChatbotController extends Controller
 
             return response()->json(['reply' => $reply]);
         } catch (\Exception $e) {
-            Log::error("Chatbot Error: " . $e->getMessage());
+            Log::error("❌ Chatbot Fatal Error: " . $e->getMessage());
             return response()->json([
                 'reply' => '⚠️ Sorry! Connection fail.',
                 'error' => $e->getMessage()
@@ -52,80 +58,94 @@ class ChatbotController extends Controller
         }
     }
 
-    private function getFitnessContextFromMongo($text)
+    private function getFitnessContextFromMongo(string $text): string
     {
         try {
+            // A. Ollama Embedding ကို စစ်မယ်
             $ollamaResponse = Http::timeout(30)->post("http://ollama:11434/api/embeddings", [
                 "model" => "mxbai-embed-large",
                 "prompt" => $text
             ]);
 
-            if ($ollamaResponse->failed()) return "";
+            if ($ollamaResponse->failed()) {
+                Log::error("❌ Ollama API Error: " . $ollamaResponse->body());
+                return "";
+            }
 
             $vector = $ollamaResponse->json()['embedding'] ?? null;
-            if (!$vector) return "";
+            if (!$vector) {
+                Log::error("❌ No Vector generated from Ollama.");
+                return "";
+            }
+
+            // B. MongoDB Vector Search ကို စစ်မယ်
+            Log::info("🔍 Debug: Attempting MongoDB Vector Search...");
 
             $results = DB::connection('mongodb')
                 ->table('fitness_rag_store')
                 ->raw(function ($collection) use ($vector) {
                     return $collection->aggregate([
                         [
-                            '$vectorSearch' => [ 
+                            '$vectorSearch' => [
                                 'index' => 'vector_index',
                                 'path' => 'embedding',
                                 'queryVector' => $vector,
                                 'numCandidates' => 100,
                                 'limit' => 5
                             ]
-                        ],
-                        [
-                            '$project' => [
-                                'text' => 1,
-                                'score' => ['$meta' => 'vectorSearchScore']
-                            ]
                         ]
                     ]);
                 });
 
             $contextText = "";
+            $count = 0;
             foreach ($results as $res) {
+                $count++;
                 $data = (object) $res;
                 if (isset($data->text)) {
                     $contextText .= "- " . $data->text . "\n";
                 }
             }
+
+            Log::info("📊 Debug: MongoDB returned " . $count . " matching documents.");
             return $contextText;
         } catch (\Exception $e) {
-            Log::warning("Vector Search Error: " . $e->getMessage());
+            Log::warning("⚠️ Vector Search Exception: " . $e->getMessage());
             return "";
         }
     }
 
-    private function prepareContext($user, $ragContext = "")
+    private function prepareContext(User $user, string $ragContext = ""): string
     {
         $bmi = $user->current_bmi;
         $adviceType = $bmi >= 30 ? "OBESE" : ($bmi >= 25 ? "OVERWEIGHT" : "NORMAL");
 
-        return "
-You are a Fitness Information Assistant. Your ONLY job is to relay information exactly as it is found in the provided DATABASE CONTEXT.
+        $finalInstruction = "
+        You are a Fitness Information Assistant. Your ONLY job is to relay information exactly as it is found in the provided DATABASE CONTEXT.
 
 STRICT OPERATING RULES:
-1. If the user asks for a recommendation (e.g., 'What should I do?'), you must check the DATABASE CONTEXT. If the context contains a specific exercise plan or advice, summarize ONLY that data.
-2. DO NOT create your own recommendations, sets, reps, or rest periods if they are not explicitly written in the DATABASE CONTEXT.
-3. If the DATABASE CONTEXT is empty or does not contain the specific answer, you MUST say: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
-4. NEVER provide medical advice or drug names.
-5. Do not use phrases like 'I recommend' or 'You should' unless that exact advice is in the database.
-6. When providing information about a workout plan, always start with a brief description followed by the complete exercise schedule (Day, Exercise Name, and Duration) in a clear list format.
+1. DATA-DRIVEN ONLY: You MUST rely ONLY on the provided DATABASE CONTEXT. Do NOT create your own recommendations, sets, reps, or rest periods if they are not explicitly in the context.
 
-USER PROFILE:
-- BMI: {$user->current_bmi} ({$adviceType})
+2. MEAL PLAN RESTRICTION & LOGIC: If the user asks for a 'Meal Plan' based on their BMI ($bmi - $adviceType), you MUST search the context for 'Nutrition' data. Combine these found nutrition items into a daily meal plan format (Breakfast, Lunch, Dinner).
 
-DATABASE CONTEXT:
-" . ($ragContext ?: "NO DATA FOUND IN DATABASE.");
+3. FULL EXERCISE PLAN DISPLAY: If the user asks about a specific exercise plan, you MUST display ALL information found in the context, including the Goal, Focus, and the COMPLETE day-by-day workout schedule. Do NOT summarize or skip any days.
+
+4. STRICT REFUSAL: If the context is empty or doesn't contain the specific answer, you MUST say exactly: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
+
+5. NO MEDICAL ADVICE: NEVER provide medical advice or drug names.
+
+6. OBJECTIVE TONE: Do not use phrases like 'I recommend' or 'You should' unless that exact advice is in the database. Always present the workout schedule in a clear list format.
+
+        USER PROFILE: BMI {$bmi}
+        DATABASE CONTEXT: " . ($ragContext ?: "NO DATA FOUND IN DATABASE.");
+
+        return $finalInstruction;
     }
 
-    private function callGroqApi($userInput, $systemInstruction, $history)
+    private function callGroqApi(string $userInput, string $systemInstruction, iterable $history): string
     {
+        Log::info("📡 Debug: Calling Groq API...");
+
         $apiKey = env('GROQ_API_KEY');
         $messages = [['role' => 'system', 'content' => $systemInstruction]];
 
@@ -133,7 +153,6 @@ DATABASE CONTEXT:
             $messages[] = ['role' => 'user', 'content' => $chat->message];
             $messages[] = ['role' => 'assistant', 'content' => $chat->reply];
         }
-
         $messages[] = ['role' => 'user', 'content' => $userInput];
 
         $response = Http::withToken($apiKey)
@@ -142,8 +161,12 @@ DATABASE CONTEXT:
                 'model' => 'llama-3.1-8b-instant',
                 'messages' => $messages,
                 'temperature' => 0.0,
-                'max_tokens' => 1500,
             ]);
+
+        if ($response->failed()) {
+            Log::error("❌ Groq API Error: " . $response->body());
+            return "AI Service Error.";
+        }
 
         return $response->json()['choices'][0]['message']['content'] ?? 'AI Service Error.';
     }

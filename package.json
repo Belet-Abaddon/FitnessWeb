@@ -25,6 +25,7 @@
     "dependencies": {
         "lodash": "^4.17.23",
         "lucide-react": "^0.577.0",
-        "recharts": "^3.8.0"
+        "recharts": "^3.8.0",
+        "ziggy-js": "^2.6.2"
     }
 }

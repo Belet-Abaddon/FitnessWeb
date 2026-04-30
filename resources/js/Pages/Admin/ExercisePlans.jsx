@@ -105,7 +105,7 @@ export default function ExercisePlans({
     const handleDelete = (id) => {
         if (
             confirm(
-                "Are you sure you want to delete this plan? All associated exercise schedules will be lost.",
+                "Are you sure you want to unpublish this plan?",
             )
         ) {
             destroy(route("exercise-plans.destroy", id));
