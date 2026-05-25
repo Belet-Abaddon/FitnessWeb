@@ -13,7 +13,7 @@ class NutritionSeeder extends Seeder
      */
     public function run()
     {
-        $filePath = "D:\\D\\PP\\Dataset.csv";
+        $filePath = "/data/Dataset.csv";
 
         if (!file_exists($filePath)) {
             $this->command->error("CSV file not found at: $filePath");

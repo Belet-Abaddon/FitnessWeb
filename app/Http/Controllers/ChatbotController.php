@@ -22,7 +22,6 @@ class ChatbotController extends Controller
         Log::info("User Input: " . $userInput);
 
         try {
-            // ၁။ MongoDB ကနေ Context ရှာတဲ့အဆင့်ကို စစ်မယ်
             $ragContext = $this->getFitnessContextFromMongo($userInput);
 
             if (empty($ragContext)) {
@@ -39,7 +38,6 @@ class ChatbotController extends Controller
                 ->get()
                 ->reverse();
 
-            // ၂။ Groq API ပို့တဲ့အဆင့်ကို စစ်မယ်
             $reply = $this->callGroqApi($userInput, $systemInstruction, $history);
 
             ChatMessage::create([
@@ -61,7 +59,6 @@ class ChatbotController extends Controller
     private function getFitnessContextFromMongo(string $text): string
     {
         try {
-            // A. Ollama Embedding ကို စစ်မယ်
             $ollamaResponse = Http::timeout(30)->post("http://ollama:11434/api/embeddings", [
                 "model" => "mxbai-embed-large",
                 "prompt" => $text
@@ -78,7 +75,6 @@ class ChatbotController extends Controller
                 return "";
             }
 
-            // B. MongoDB Vector Search ကို စစ်မယ်
             Log::info("🔍 Debug: Attempting MongoDB Vector Search...");
 
             $results = DB::connection('mongodb')
