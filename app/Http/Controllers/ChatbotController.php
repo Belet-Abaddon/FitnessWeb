@@ -97,11 +97,13 @@ class ChatbotController extends Controller
 
             $contextText = "";
             $count = 0;
+            
             foreach ($results as $res) {
                 $count++;
-                $data = (object) $res;
-                if (isset($data->text)) {
-                    $contextText .= "- " . $data->text . "\n";
+                if (isset($res->text)) {
+                    $contextText .= "- " . $res->text . "\n";
+                } elseif (is_array($res) && isset($res['text'])) {
+                    $contextText .= "- " . $res['text'] . "\n";
                 }
             }
 
@@ -133,7 +135,7 @@ STRICT OPERATING RULES:
 
 USER PROFILE: BMI {$bmi}
 DATABASE CONTEXT: " . $contextSource;
-    }
+}
 
     private function callGroqApi(string $userInput, string $systemInstruction, iterable $history): string
     {
