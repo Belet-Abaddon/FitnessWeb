@@ -27,7 +27,7 @@ class IndexEverythingToMongo extends Command
 
         $this->processCollection(NutritionTip::all(), 'nutrition', 'name', 'content');
         $this->processCollection(FitnessKnowledge::all(), 'knowledge', 'question', 'answer');
-        $this->processCollection(Exercise::all(), 'exercise', 'title', 'description');
+        $this->processCollection(Exercise::all(), 'exercise', 'name', 'description');
         $this->indexPlans();
 
         $this->info("\n✅ [COMPLETED] All collections indexed successfully!");
@@ -41,7 +41,12 @@ class IndexEverythingToMongo extends Command
         foreach ($items as $index => $item) {
             $count = $index + 1;
 
-            $textToIndex = "Source: " . ucfirst($sourceType) . "\nTitle: " . $item->$titleField . "\nContent: " . $item->$contentField;
+            $textToIndex = "Fitness context about " . $sourceType . ": " . $item->$titleField . ". Details: " . $item->$contentField;
+            
+            if (isset($item->duration)) {
+                $textToIndex .= " Duration: " . $item->duration;
+            }
+
             $embedding = $this->getOllamaEmbedding($textToIndex);
 
             if ($embedding) {
@@ -68,10 +73,10 @@ class IndexEverythingToMongo extends Command
             $count = $index + 1;
             $detailedExercises = "";
             foreach ($plan->exercises as $ex) {
-                $detailedExercises .= "- Day {$ex->pivot->day_number}: {$ex->title} for {$ex->pivot->duration_minutes} minutes\n";
+                $detailedExercises .= "- Day {$ex->pivot->day_number}: {$ex->name} for {$ex->pivot->duration_minutes} minutes\n";
             }
 
-            $textToIndex = "Source: Plan\nName: {$plan->name}\nDescription: {$plan->description}\nGoal: BMI {$plan->min_bmi_category} to {$plan->max_bmi_category}\nWeekly Routine:\n" . $detailedExercises;
+            $textToIndex = "Fitness Workout Plan Name: {$plan->name}. Description: {$plan->description}. Target BMI Goal: From BMI {$plan->min_bmi_category} to {$plan->max_bmi_category}. Full Day-by-Day Schedule Routine:\n" . $detailedExercises;
             $embedding = $this->getOllamaEmbedding($textToIndex);
 
             if ($embedding) {

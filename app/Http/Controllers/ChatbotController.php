@@ -59,9 +59,11 @@ class ChatbotController extends Controller
     private function getFitnessContextFromMongo(string $text): string
     {
         try {
+            $searchPrompt = "Fitness exercise nutrition knowledge workout plan context query: " . $text;
+
             $ollamaResponse = Http::timeout(30)->post("http://ollama:11434/api/embeddings", [
                 "model" => "mxbai-embed-large",
-                "prompt" => $text
+                "prompt" => $searchPrompt
             ]);
 
             if ($ollamaResponse->failed()) {
@@ -116,26 +118,21 @@ class ChatbotController extends Controller
         $bmi = $user->current_bmi;
         $adviceType = $bmi >= 30 ? "OBESE" : ($bmi >= 25 ? "OVERWEIGHT" : "NORMAL");
 
-        $finalInstruction = "
-        You are a Fitness Information Assistant. Your ONLY job is to relay information exactly as it is found in the provided DATABASE CONTEXT.
+        $contextSource = (!empty($ragContext)) ? $ragContext : "EMPTY_NO_DATA_AVAILABLE";
+
+        return "
+You are a Fitness Information Assistant. Your ONLY job is to relay information exactly as it is found in the provided DATABASE CONTEXT.
 
 STRICT OPERATING RULES:
 1. DATA-DRIVEN ONLY: You MUST rely ONLY on the provided DATABASE CONTEXT. Do NOT create your own recommendations, sets, reps, or rest periods if they are not explicitly in the context.
-
 2. MEAL PLAN RESTRICTION & LOGIC: If the user asks for a 'Meal Plan' based on their BMI ($bmi - $adviceType), you MUST search the context for 'Nutrition' data. Combine these found nutrition items into a daily meal plan format (Breakfast, Lunch, Dinner).
-
 3. FULL EXERCISE PLAN DISPLAY: If the user asks about a specific exercise plan, you MUST display ALL information found in the context, including the Goal, Focus, and the COMPLETE day-by-day workout schedule. Do NOT summarize or skip any days.
-
-4. STRICT REFUSAL: If the context is empty or doesn't contain the specific answer, you MUST say exactly: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
-
+4. STRICT REFUSAL: If the DATABASE CONTEXT is 'EMPTY_NO_DATA_AVAILABLE' or doesn't contain the specific answer to the query, you MUST say exactly: 'I am sorry, but I do not have that specific information in my records. I can only provide details based on our verified fitness database.'
 5. NO MEDICAL ADVICE: NEVER provide medical advice or drug names.
-
 6. OBJECTIVE TONE: Do not use phrases like 'I recommend' or 'You should' unless that exact advice is in the database. Always present the workout schedule in a clear list format.
 
-        USER PROFILE: BMI {$bmi}
-        DATABASE CONTEXT: " . ($ragContext ?: "NO DATA FOUND IN DATABASE.");
-
-        return $finalInstruction;
+USER PROFILE: BMI {$bmi}
+DATABASE CONTEXT: " . $contextSource;
     }
 
     private function callGroqApi(string $userInput, string $systemInstruction, iterable $history): string
