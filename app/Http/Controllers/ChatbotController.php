@@ -97,7 +97,7 @@ class ChatbotController extends Controller
 
             $contextText = "";
             $count = 0;
-            
+
             foreach ($results as $res) {
                 $count++;
                 if (isset($res->text)) {
@@ -135,7 +135,7 @@ STRICT OPERATING RULES:
 
 USER PROFILE: BMI {$bmi}
 DATABASE CONTEXT: " . $contextSource;
-}
+    }
 
     private function callGroqApi(string $userInput, string $systemInstruction, iterable $history): string
     {
@@ -151,7 +151,8 @@ DATABASE CONTEXT: " . $contextSource;
         $messages[] = ['role' => 'user', 'content' => $userInput];
 
         $response = Http::withToken($apiKey)
-            ->timeout(60)
+            ->connectTimeout(10)
+            ->timeout(120)
             ->post("https://api.groq.com/openai/v1/chat/completions", [
                 'model' => 'llama-3.1-8b-instant',
                 'messages' => $messages,

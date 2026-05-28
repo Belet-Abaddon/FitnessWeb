@@ -25,8 +25,8 @@ class IndexEverythingToMongo extends Command
         DB::connection('mongodb')->table('fitness_rag_store')->truncate();
         $this->warn("Clear existing MongoDB store... Done.");
 
-        $this->processCollection(NutritionTip::all(), 'nutrition', 'name', 'content');
-        $this->processCollection(FitnessKnowledge::all(), 'knowledge', 'question', 'answer');
+        $this->processCollection(NutritionTip::limit(100)->get(), 'nutrition', 'name', 'content');
+        $this->processCollection(FitnessKnowledge::limit(100)->get(), 'knowledge', 'question', 'answer');
         $this->processCollection(Exercise::all(), 'exercise', 'name', 'description');
         $this->indexPlans();
 
