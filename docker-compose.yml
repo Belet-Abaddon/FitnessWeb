@@ -27,13 +27,15 @@ services:
 
   # MongoDB with Atlas Search
   mongodb:
-    image: mongo:7.0
+    image: mongodb/mongodb-atlas-local:latest
     container_name: stayfit_mongodb
     ports:
-      - "27017:27017"
+      - "50344:27017"
+
     volumes:
       - mongodb_data:/data/db
-    command: mongod --quiet --logpath /dev/null 
+      - mongodb_config:/data/configdb
+      - mongodb_mongot:/data/mongot 
 
   # Ollama AI
   ollama:
@@ -47,4 +49,6 @@ services:
 volumes:
   mysql_data:
   mongodb_data:
+  mongodb_config:
+  mongodb_mongot:
   ollama_data:
